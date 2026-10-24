@@ -1,7 +1,9 @@
 {
   "name": "sci3d-diagrams",
-  "description": "Realistic, scientifically accurate 3D physics & chemistry diagrams: E/B field lines, waves, Kepler orbits, projectiles, surfaces, molecules, crystals and hydrogen orbitals.",
-  "version": "1.0.0",
-  "author": { "name": "fehmeed4u" },
+  "description": "Exam-style, scientifically accurate 2D black-and-white physics & chemistry diagrams: field lines, ray diagrams, waves, orbits, molecules (skeletal, VSEPR, dot-and-cross), crystals and orbitals.",
+  "version": "2.0.0",
+  "author": {
+    "name": "fehmeed4u"
+  },
   "license": "MIT"
 }

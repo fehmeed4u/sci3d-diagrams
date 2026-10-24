@@ -1,12 +1,14 @@
 {
   "name": "sci3d",
-  "description": "Realistic, scientifically accurate 3D physics & chemistry diagrams in pure Python",
-  "owner": { "name": "fehmeed4u" },
+  "description": "Scientifically accurate 2D black-and-white exam-style physics & chemistry diagrams in pure Python",
+  "owner": {
+    "name": "fehmeed4u"
+  },
   "plugins": [
     {
       "name": "sci3d-diagrams",
       "source": "./plugins/sci3d-diagrams",
-      "description": "3D field lines, waves, orbits, molecules, crystals and atomic orbitals rendered from real equations (PyVista + ASE + RDKit)"
+      "description": "Exam-paper style 2D line diagrams computed from real equations and data (matplotlib + RDKit + ASE)"
     }
   ]
 }
