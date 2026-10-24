@@ -91,6 +91,12 @@ f.dim((-1, -1.3), (1, -1.3), "d")              # dimension line with arrowheads
 f.text((0, 1.5), "X"); f.line(pts, dashed=True); f.circle(c, r); f.current(c, r, out=True)
 f.save("out.png", svg=True)
 ```
+Mechanics helpers:
+- `f.rot_arrow(c, r, a0, a1, label)` draws a curved ω arrow. Angles are in degrees; `a1 < a0` makes it clockwise, and `rx=`/`ry=` give an elliptical arc.
+- `f.angle(v, a0, a1, r, "θ")` draws an angle arc with a label. `f.right_angle(p, d1, d2, s)` draws a right-angle box.
+- `f.surface(p0, p1, side)` draws a hatched wall or ground. `f.poly(pts, dashed=True, hatch="///")` draws a polygon.
+
+Slide output: `Fig(font="sans", px=(1800, 1280), transparent=True)` gives an exact pixel size and a transparent background. Add `ink="white", paper="#141d35"` for dark slides; `paper` fills shapes and label boxes. A worked set of ten mechanics figures is in `examples/a4-rigid-body/make_figures.py`.
 Domain functions: `efield plates bfield rays wave_transverse wave_longitudinal wave_standing interference kepler projectile graph contour vfield structure shape dotcross crystal orbital radial`. Use `f.plot_axes(xlim, ylim, "x / m", "y / m", grid=True)` for a graph with arrowed axes.
 
 **Circuits:** use `schemdraw`, which is black and white by default (`pip install schemdraw`):

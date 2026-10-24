@@ -26,7 +26,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Polygon, Rectangle, Arc, Ellipse
 
-INK, LW = "black", 1.2
+INK, PAPER, LW = "black", "white", 1.2  # ink / fill colours; Fig(ink=..., paper=...) switches them
 FONTS = {"serif": dict(family="STIXGeneral", math="stix"),
          "sans": dict(family="DejaVu Sans", math="dejavusans")}
 
@@ -62,10 +62,20 @@ class Fig:
     """Black-on-white matplotlib figure. Diagram mode (equal aspect, no axes) by default;
     call .plot_axes(...) for an exam-style graph with arrowed axes. All methods chain."""
 
-    def __init__(self, title=None, caption=None, figno=None, size=(6.0, 4.5), font="serif"):
+    def __init__(self, title=None, caption=None, figno=None, size=(6.0, 4.5), font="serif", ink="black",
+                 paper="white", px=None, transparent=False):
+        """px=(W, H): exact pixel size (no tight crop; limits grow to keep 1:1 scale).
+        ink/paper: e.g. ink="white", paper="#141d35" for dark slides (paper fills shapes and label boxes)."""
+        global INK, PAPER
+        INK, PAPER = ink, paper
         set_font(font)
-        self.fig, self.ax = plt.subplots(figsize=size)
-        self.ax.set_aspect("equal"); self.ax.axis("off")
+        plt.rcParams.update({"text.color": ink, "axes.edgecolor": ink, "xtick.color": ink, "ytick.color": ink,
+                             "axes.labelcolor": ink, "hatch.color": ink})
+        self.px, self.transparent, self.dpi = px, transparent, 200
+        self.fig, self.ax = plt.subplots(figsize=(px[0] / 200, px[1] / 200) if px else size)
+        if px:
+            self.ax.set_position([0.015, 0.015, 0.97, 0.97])
+        self.ax.set_aspect("equal", adjustable="datalim" if px else "box"); self.ax.axis("off")
         self.title, self.caption, self.figno = title, caption, figno
         self.notes, self.lims = [], None
 
@@ -122,7 +132,7 @@ class Fig:
         return self
 
     def text(self, xy, s, size=11, ha="center", va="center", bg=False, **kw):
-        bb = dict(boxstyle="square,pad=0.08", fc="white", ec="none") if bg else None
+        bb = dict(boxstyle="square,pad=0.08", fc=PAPER, ec="none") if bg else None
         self.ax.text(*xy, s, fontsize=size, ha=ha, va=va, color=INK, zorder=6, bbox=bb, **kw)
         return self
 
@@ -146,8 +156,8 @@ class Fig:
         self.text((p1 + p2) / 2 + o + np.asarray(text_off), s, size=size, bg=True)
         return self
 
-    def circle(self, c, r, fill="white", lw=LW, hatch=None, z=5, ls="-"):
-        self.ax.add_patch(Circle(c, r, fc=fill, ec=INK, lw=lw, hatch=hatch, zorder=z, ls=ls))
+    def circle(self, c, r, fill=None, lw=LW, hatch=None, z=5, ls="-"):
+        self.ax.add_patch(Circle(c, r, fc=PAPER if fill is None else fill, ec=INK, lw=lw, hatch=hatch, zorder=z, ls=ls))
         return self
 
     def dot(self, c, r):
@@ -162,6 +172,50 @@ class Fig:
             k = r * 0.62
             for s in (1, -1):
                 self.ax.plot([c[0] - k, c[0] + k], [c[1] - s * k, c[1] + s * k], color=INK, lw=1.0, zorder=7)
+        return self
+
+    def rot_arrow(self, c, r, a0, a1, label=None, lw=LW, size=12, label_r=None, rx=None, ry=None, **tkw):
+        """Curved arrow (angular velocity, rotation sense) on a circle/ellipse about c from angle a0 to a1
+        (degrees; a1 > a0 = anticlockwise, a1 < a0 = clockwise). Head at a1."""
+        rx, ry = rx or r, ry or r
+        t = np.radians(np.linspace(a0, a1, 80)); c = np.asarray(c, float)
+        p = c + np.c_[rx * np.cos(t), ry * np.sin(t)]
+        self.ax.plot(p[:-3, 0], p[:-3, 1], color=INK, lw=lw, zorder=4, solid_capstyle="round")
+        self.head(p[-1], p[-1] - p[-4], size)
+        if label:
+            am = np.radians((a0 + a1) / 2); lr = label_r or 1.25
+            self.text(c + np.array([rx * lr * np.cos(am), ry * lr * np.sin(am)]), label, **tkw)
+        return self
+
+    def angle(self, v, a0, a1, r, label=None, lr=1.45, lw=0.9, **tkw):
+        """Angle arc at vertex v between directions a0 and a1 (degrees), with label."""
+        self.ax.add_patch(Arc(v, 2 * r, 2 * r, theta1=min(a0, a1), theta2=max(a0, a1), color=INK, lw=lw, zorder=4))
+        if label:
+            am = np.radians((a0 + a1) / 2)
+            self.text(np.asarray(v, float) + lr * r * np.array([np.cos(am), np.sin(am)]), label, **tkw)
+        return self
+
+    def right_angle(self, p, d1, d2, s):
+        """Right-angle box at p between unit directions d1 and d2, side s."""
+        p, d1, d2 = (np.asarray(x, float) for x in (p, d1, d2))
+        d1, d2 = d1 / np.hypot(*d1), d2 / np.hypot(*d2)
+        return self.line([p + d1 * s, p + (d1 + d2) * s, p + d2 * s], lw=0.8)
+
+    def surface(self, p0, p1, side=1, n=None, lw=1.6, tick=None):
+        """Fixed surface (wall, ground, ceiling): thick line p0-p1 with hatching on one side
+        (side=+1: left of the direction p0->p1, -1: right)."""
+        p0, p1 = np.asarray(p0, float), np.asarray(p1, float)
+        d = p1 - p0; L = np.hypot(*d); u = d / L; nrm = np.array([-u[1], u[0]]) * side
+        tick = tick or 0.04 * self.span(); n = n or max(3, int(L / (0.55 * tick)))
+        self.line([p0, p1], lw=lw)
+        for t in np.linspace(0, 1, n + 1)[:-1]:
+            q = p0 + d * t + u * 0.5 * tick / 1.5
+            self.line([q, q + nrm * tick - u * tick * 0.7], lw=0.7)
+        return self
+
+    def poly(self, pts, fill=None, lw=LW, dashed=False, hatch=None, z=3):
+        self.ax.add_patch(Polygon(np.asarray(pts, float), closed=True, fc=PAPER if fill is None else fill, ec=INK,
+                                  lw=lw, ls="--" if dashed else "-", hatch=hatch, zorder=z))
         return self
 
     def note(self, k, v):
@@ -212,10 +266,14 @@ class Fig:
                          ha="center", va="top", fontsize=11)
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         out = []
+        kw = dict(dpi=self.dpi) if self.px else dict(dpi=dpi, bbox_inches="tight", pad_inches=0.12)
+        kw["transparent"] = self.transparent
+        if not self.transparent:
+            kw["facecolor"] = PAPER
         for ext, on in ((os.path.splitext(path)[1] or ".png", True), (".svg", svg), (".pdf", pdf)):
             if on:
                 p = os.path.splitext(path)[0] + ext
-                self.fig.savefig(p, dpi=dpi, bbox_inches="tight", pad_inches=0.12)
+                self.fig.savefig(p, **kw)
                 if p not in out:
                     out.append(p)
         plt.close(self.fig)
@@ -407,7 +465,7 @@ def plates(f, V=100.0, d=0.02, L=0.06, lines=24, equipotential=True):
     for yy, sgn in ((yt, "+"), (y[jb], "−")):
         f.ax.add_patch(Rectangle((-L / 2, yy - t / 2), L, t, fc=INK, ec=INK, zorder=5))
         for xx in np.linspace(-L / 2, L / 2, 11)[1:-1]:
-            f.ax.text(xx, yy, sgn, color="white", fontsize=10, fontweight="bold", ha="center",
+            f.ax.text(xx, yy, sgn, color=PAPER, fontsize=10, fontweight="bold", ha="center",
                       va="center_baseline", zorder=7)
     f.text((-L / 2 - 0.08 * d, yt), "+", size=14, ha="right"); f.text((-L / 2 - 0.08 * d, y[jb]), "−", size=14, ha="right")
     Ec = float(np.hypot(*Ef(np.array([[0.0, 0.0]]))[0]))
@@ -472,7 +530,7 @@ def coils(f, loops, kind="coil", lims=None, nlines=7, R=1.0, L=0.0, levels_at=0.
                 for i in cr:
                     d = p[i + 1] - p[i - 1]; f.head(p[i], d if np.dot(d, Bf(p[i:i + 1])[0]) >= 0 else -d)
     if kind == "magnet":
-        f.ax.add_patch(Rectangle((-L / 2, -R), L, 2 * R, fc="white", ec=INK, lw=1.4, zorder=5))
+        f.ax.add_patch(Rectangle((-L / 2, -R), L, 2 * R, fc=PAPER, ec=INK, lw=1.4, zorder=5))
         f.line([[0, -R], [0, R]], lw=1.0, z=6)
         north = sum(I for _, _, I in loops) > 0
         f.text((L / 4, 0), "N" if north else "S", size=16, weight="bold")
@@ -771,11 +829,11 @@ def kepler(f, a=1.0, e=0.6, M=1.0, n_marks=12, sectors=True):
         w = 2 * np.pi / n_marks
         for M0, hatch in ((-w / 2, "////"), (np.pi - w / 2, "\\\\\\\\")):
             arc = pos(np.linspace(M0, M0 + w, 60))
-            f.ax.add_patch(Polygon(np.vstack([[0, 0], arc]), closed=True, fc="white", ec=INK, lw=0.8,
+            f.ax.add_patch(Polygon(np.vstack([[0, 0], arc]), closed=True, fc=PAPER, ec=INK, lw=0.8,
                                    hatch=hatch, zorder=1))
     for p in pos(np.linspace(0, 2 * np.pi, n_marks, endpoint=False)):
         f.circle(p, 0.018 * a, fill=INK, lw=0)
-    f.circle((0, 0), 0.05 * a, fill="white", lw=1.2)
+    f.circle((0, 0), 0.05 * a, lw=1.2)
     f.text((0, 0), "S", size=9)
     f.text((-2 * a * e, 0), "×", size=12)
     f.ax.plot([-a * (1 + e), a * (1 - e)], [0, 0], color=INK, lw=0.5, ls=":")
@@ -1208,7 +1266,7 @@ def crystal(f, name, view="layer", repeat=2, style="ball"):
         at = bulk(name, cubic=True); src = "ASE reference lattice"
     cell = np.array(at.cell); frac = np.round(at.get_scaled_positions(wrap=True), 6) % 1.0; sym0 = at.get_chemical_symbols()
     elems = sorted(set(sym0), key=lambda e: -IONIC.get(e, 1.0))
-    fills = [("white", None), (INK, None), ("white", "////"), ("0.6", None)]
+    fills = [(PAPER, None), (INK, None), (PAPER, "////"), ("0.6", None)]
     sty = {e: fills[i % 4] for i, e in enumerate(elems)}
     ii, dd = neighbor_list("id", at, 7.0); dmin = dd[ii == 0].min(); cn = int(np.sum(dd[ii == 0] < dmin * 1.05))
     if set(elems) <= set(IONIC) and len(elems) > 1:
@@ -1368,7 +1426,7 @@ def orbital(f, name="2p_z", Zn=1, prob=0.9, style="boundary", phase="hatch", nod
         for v, sgn in ((iso, 1), (-iso, -1)):
             if (sgn * P > iso).any():
                 hatch = (phase == "hatch" and sgn < 0)
-                fill = "0.75" if (phase == "shade" and sgn > 0) else ("white" if hatch else "none")
+                fill = "0.75" if (phase == "shade" and sgn > 0) else (PAPER if hatch else "none")
                 f.ax.contourf(GA, GB, sgn * P, levels=[iso, np.inf], colors=[fill if fill != "none" else (1, 1, 1, 0)],
                               hatches=["////"] if hatch else [None], zorder=1)
                 f.ax.contour(GA, GB, P, levels=[v], colors=INK, linewidths=1.3, zorder=3, linestyles="solid")
